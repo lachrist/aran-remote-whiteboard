@@ -1,8 +1,8 @@
 
+const Acorn = require("acorn");
 const AranAccess = require("aran-access");
-const ParseClient = require("../parse-client.js");
 
-module.exports = ({aran, antena, argm, transform}, callback) => {
+module.exports = ({aran, argm}, callback) => {
 
   let wrappers = new WeakMap();
 
@@ -19,17 +19,15 @@ module.exports = ({aran, antena, argm, transform}, callback) => {
     return value;
   };
 
-  const cleanup = (value) => wrappers.has(value) ? wrappers.get(value) : value;
-
   const wrap = (value, origin, serial) => {
     const wrapper = {value:jsonify(value), location:location(serial), origin:origin};
     wrappers.set(wrapper, value);
     return wrapper;
   };
 
-  const membrane = {transform, enter:decode, leave:cleanup};
+  const cleanup = (value) => wrappers.has(value) ? wrappers.get(value) : value;
 
-  const access = AranAccess(membrane);
+  const access = AranAccess({enter:decode, leave:cleanup});
 
   const jsonify = (value) => {
     if (wrappers.has(value) || value === null || typeof value === "boolean")
@@ -45,15 +43,16 @@ module.exports = ({aran, antena, argm, transform}, callback) => {
     return typeof value;
   };
 
-  const location = (serial) => aran.root(serial).source+"@"+aran.node(serial).loc.start.line+":"+aran.node(serial).loc.start.column;
+  const location = (serial) => argm.alias+"@"+aran.root(serial).source+"#"+aran.node(serial).loc.start.line+":"+aran.node(serial).loc.start.column;
 
   const advice = Object.assign({}, access.advice);
 
   advice.invoke = ($$object, $$key, array$$value, serial) => {
     const object = access.release(cleanup($$object));
-    if (object.constructor.name === "CanvasRenderingContext2D")
+    const name = object.constructor.name;
+    if (name === "CanvasRenderingContext2D")
       console.log("At "+location(serial)+", context2d."+access.release(cleanup($$key))+" was called with: "+JSON.stringify(array$$value.map(jsonify)));
-    if (object.constructor.name === "Socket") {
+    if (name === "r" || name === "Socket") {
       const key = access.release(cleanup($$key));
       if (key === "emit") {
         const event = access.release(cleanup(array$$value[0]));
@@ -69,14 +68,8 @@ module.exports = ({aran, antena, argm, transform}, callback) => {
   advice.get = (object, key, serial) => {
     const value = access.advice.get(object, key, serial)
     if (access.release(cleanup(object)).constructor.name === "MouseEvent")
-      return wrap(value, {"mouse": access.release(cleanup(key))}, serial);
+      return wrap(value, "mouse."+access.release(cleanup(key)), serial);
     return value;
-  };
-
-  advice.set = (object, key, value, serial) => {
-    if (access.release(cleanup(object)).constructor.name === "CanvasRenderingContext2D")
-      console.log("At "+location(serial)+", context2d."+cleanup(key)+" was assigned to: "+JSON.stringify(jsonify(value)));
-    return access.advice.set(object, key, value, serial);
   };
 
   advice.primitive = (primitive, serial) => wrap(
@@ -95,8 +88,14 @@ module.exports = ({aran, antena, argm, transform}, callback) => {
     serial);
 
   callback(null, {
-    parse: ParseClient,
-    advice: advice
+    advice: advice,
+    parse: (script, source) => {
+      if (source === "http://localhost:3000/main.js") {
+        const estree = Acorn.parse(script, {locations:true});
+        estree.source = source;
+        return estree;
+      }
+    }
   });
 
 };

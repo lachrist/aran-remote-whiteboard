@@ -2,6 +2,7 @@
 const Path = require("path");
 const Acorn = require("acorn");
 const AranAccess = require("aran-access");
+const Chalk = require("chalk");
 
 module.exports = ({aran, share}) => {
 
@@ -14,11 +15,9 @@ module.exports = ({aran, share}) => {
     return wrapper;
   };
 
-  const cleanup = (value) => wrappers.has(value) ? wrappers.get(value) : value;
-
   const access = AranAccess({
-    enter: (value) => typeof value === "string" && value in cache ? (console.log("USING", value), cache[value]) : value,
-    leave: cleanup
+    enter: (value) => typeof value === "string" && value in cache ? cache[value] : value,
+    leave: (value) => wrappers.has(value) ? wrappers.get(value) : value
   });
 
   const jsonify = (value) => {
@@ -40,17 +39,18 @@ module.exports = ({aran, share}) => {
   const advice = Object.assign({}, access.advice);
 
   advice.invoke = ($$object, $$key, array$$value, serial) => {
-    const object = access.release(cleanup($$object));
-    if (object.constructor.name === "CanvasRenderingContext2D")
-      console.log("At "+location(serial)+", context2d."+access.release(cleanup($$key))+" was called with: "+JSON.stringify(array$$value.map(jsonify), null, 2));
-    console.log("INVOKING", object.constructor.name, access.release(cleanup($$key)));
-    if (object.constructor.name === "r" || object.constructor.name === "Socket") {
-      const key = access.release(cleanup($$key));
+    const object = access.release(access.membrane.leave($$object));
+    const name = object.constructor.name;
+    if (name === "CanvasRenderingContext2D")
+      console.log(Chalk.blue("At "+location(serial)+", context2d."+access.release(access.membrane.leave($$key))+" was called with: "+JSON.stringify(array$$value.map(jsonify), null, 2)));
+    console.log(Chalk.green("Invoking", name, access.release(access.membrane.leave($$key)), location(serial)));
+    if (name === "r" || name === "Socket") {
+      const key = access.release(access.membrane.leave($$key));
       if (key === "emit") {
+
         const token = "aran-"+Math.random().toString(36).substring(2);
         cache[token] = array$$value[1];
         array$$value[1] = token;
-        console.log("CREATE", token, location(serial));
       }
     }
     return access.advice.invoke($$object, $$key, array$$value, serial);
@@ -58,15 +58,9 @@ module.exports = ({aran, share}) => {
 
   advice.get = (object, key, serial) => {
     const value = access.advice.get(object, key, serial)
-    if (access.release(cleanup(object)).constructor.name === "MouseEvent")
-      return wrap(value, "mouse."+access.release(cleanup(key)), serial);
+    if (access.release(access.membrane.leave(object)).constructor.name === "MouseEvent")
+      return wrap(value, "mouse."+access.release(access.membrane.leave(key)), serial);
     return value;
-  };
-
-  advice.set = (object, key, value, serial) => {
-    if (access.release(cleanup(object)).constructor.name === "CanvasRenderingContext2D")
-      console.log("At "+location(serial)+", context2d."+cleanup(key)+" was assigned to: "+JSON.stringify(jsonify(value)));
-    return access.advice.set(object, key, value, serial);
   };
 
   advice.primitive = (primitive, serial) => wrap(
@@ -85,18 +79,17 @@ module.exports = ({aran, share}) => {
     serial);
 
   return ({global, argm, transform}) => {
-    const whitelist = "window" in global ? ["http://localhost:3000/main.js"] : [Path.join(__dirname, "app", "index.js")];
+    const whitelist = "window" in global ? ["http://localhost:3000/main.js"] : [Path.join(__dirname, "whiteboard", "index.js")];
     return {
+      advice: Object.assign({}, advice, {SANDBOX: access.capture(global)}),
       parse: (script, source) => {
-        console.log("SOURCE", source, whitelist);
         if (whitelist.includes(source)) {
           const estree = Acorn.parse(script, {locations:true});
           estree.source = source;
           estree.alias = argm.alias;
           return estree;
         }
-      },
-      advice: Object.assign({}, advice, {SANDBOX: access.capture(global)})
+      }
     }
   };
 

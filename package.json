@@ -5,8 +5,10 @@
   "license": "MIT",
   "dependencies": {
     "acorn": "5.7.1",
-    "aran-remote": "0.0.7",
+    "aran-access": "0.1.6",
     "aran-lite": "0.0.4",
-    "aran-access": "0.1.6"
+    "aran-remote": "0.0.7",
+    "chalk": "2.4.1",
+    "whiteboard": "file:whiteboard"
   }
 }
