@@ -3,4 +3,4 @@ node ./node_modules/aran-remote/bin.js --remote-analysis remote-analysis.js --no
 sleep 2
 node ./node_modules/aran-remote/node/bin.js --host localhost:8000 --alias server -- ./whiteboard/index.js &
 sleep 5
-/Applications/Firefox.app/Contents/MacOS/firefox-bin -private -devtools "http://localhost:3000/index.html?otiluke-alias=client1" -new-tab -url "http://localhost:3000/index.html?otiluke-alias=client2"
+/Applications/Firefox.app/Contents/MacOS/firefox-bin -private "http://localhost:3000/index.html?otiluke-alias=client1" -new-tab -url "http://localhost:3000/index.html?otiluke-alias=client2"

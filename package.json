@@ -9,6 +9,7 @@
     "aran-lite": "0.0.4",
     "aran-remote": "0.0.7",
     "chalk": "2.4.1",
+    "minimist": "1.2.0",
     "whiteboard": "file:whiteboard"
   }
 }

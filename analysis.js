@@ -1,10 +1,42 @@
 const Path = require("path");
 const Acorn = require("acorn");
 const AranAccess = require("aran-access");
-const Chalk = require("chalk");
+
 const main_source = Path.join(__dirname, "whiteboard", "index.js");
 const identity = (argument0) => argument0;
-module.exports = ({aran}) => {
+module.exports = ({aran, argm, antena}) => {
+  const serialize = ($$value) => {
+    if (wrappers.has($$value)) {
+      return {wrapper:$$value, inner:wrappers.get(value)};
+    }
+    const $value = $$value;
+    if (Array.isArray($value)) {
+      return $value.map(serialize);
+    }
+    if (typeof $value === "object") {
+      const json = {};
+      for (let key in $value)
+        json[key] = serialize($value[key]);
+      return json;
+    };
+    return $value;
+  };
+  const instantiate = (json) => {
+    if ("wrapper" in json) {
+      wrappers.set(json.wrapper, json.inner);
+      return json.wrapper;
+    }
+    if (Array.isArray(json.value)) {
+      return json.value.map(instantiate);
+    }
+    if (typeof json.value === "object") {
+      const object = {};
+      for (let key in json.value)
+        object[key] = instantiate(json.value[key]);
+      return object;
+    }
+    return json.value;
+  };
   const wrappers = new WeakMap();
   const stack = [];
   const wrap = (value, origin, serial) => {
@@ -33,16 +65,17 @@ module.exports = ({aran}) => {
     const object = access.release(access.membrane.leave($$object));
     const name = object.constructor.name;
     if (name === "CanvasRenderingContext2D")
-      console.log(Chalk.blue("At "+location(serial)+", context2d."+access.release(access.membrane.leave($$key))+" was called with: "+JSON.stringify(array$$value.map(jsonify), null, 2)));
-    console.log(Chalk.green("Invoking", name, access.release(access.membrane.leave($$key)), location(serial)));
+      console.log("At "+location(serial)+", context2d."+access.release(access.membrane.leave($$key))+" was called with: "+JSON.stringify(array$$value.map(jsonify), null, 2));
+    console.log("Invoking", name, access.release(access.membrane.leave($$key)), location(serial));
     if ((aran.root(serial).alias !== "server" && name === "r") || (aran.root(serial).alias === "server" && name === "Socket")) {
       const key = access.release(access.membrane.leave($$key));
       if (key === "emit") {
-        stack.push(array$$value[1]);
+        antena.request("POST", "/", {}, serialize(array$$value[1]));
       } else if (key === "on") {
         const $callback = access.membrane.leave(array$$value[1]);
         array$$value[1] = access.membrane.enter(function () {
-          $callback.apply(access.capture(this), [stack.pop()]);
+          const [status, message, headers, body] = antena.request("GET", "/", {}, "");
+          $callback.apply(access.capture(this), [instantiate(body)]);
         });
       }
     }
@@ -66,7 +99,7 @@ module.exports = ({aran}) => {
     access.advice.unary(operator, argument, serial),
     {unary:operator, argument:jsonify(argument)},
     serial);
-  return ({global, argm}) => ({
+  return {
     advice: Object.assign({}, advice, {SANDBOX: access.capture(global)}),
     parse: (script, source) => {
       if ((argm.alias === "server" && source === main_source) || (argm.alias !== "server" && source === "http://localhost:3000/main.js")) {
@@ -76,5 +109,5 @@ module.exports = ({aran}) => {
         return estree;
       }
     }
-  });
+  };
 };
