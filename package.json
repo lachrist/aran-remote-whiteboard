@@ -1,0 +1,12 @@
+{
+  "name": "aran-remote-whiteboard",
+  "version": "0.0.0",
+  "author": "Laurent Christophe",
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "5.7.1",
+    "aran-remote": "0.0.7",
+    "aran-lite": "0.0.4",
+    "aran-access": "0.1.6"
+  }
+}
