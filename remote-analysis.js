@@ -13,7 +13,7 @@ module.exports = ({aran}) => {
     return wrapper;
   };
   const cleanup = (value) => wrappers.has(value) ? wrappers.get(value) : value;
-  const access = AranAccess({enter:identity, leave:cleanup});
+  const access = AranAccess({check:true, enter:identity, leave:cleanup});
   const jsonify = (value) => {
     if (wrappers.has(value) || value === null || typeof value === "boolean")
       return value;
@@ -42,29 +42,21 @@ module.exports = ({aran}) => {
       } else if (key === "on") {
         const $callback = access.membrane.leave(array$$value[1]);
         array$$value[1] = access.membrane.enter(function () {
-          $callback.apply(access.capture(this), [stack.pop()]);
+          return Reflect.apply($callback, this, [stack.pop()]);
         });
       }
     }
     return access.advice.invoke($$object, $$key, array$$value, serial);
   };
   advice.get = (object, key, serial) => {
-    const value = access.advice.get(object, key, serial)
+    const value = access.advice.get(object, key, serial);
     if (aran.root(serial).alias !== "server" && access.release(access.membrane.leave(object)).constructor.name === "MouseEvent")
       return wrap(value, "mouse."+access.release(access.membrane.leave(key)), serial);
     return value;
   };
-  advice.primitive = (primitive, serial) => wrap(
-    access.advice.primitive(primitive, serial),
-    "literal",
-    serial);
   advice.binary = (operator, left, right, serial) => wrap(
     access.advice.binary(operator, left, right, serial),
     {binary:operator, left:jsonify(left), right:jsonify(right)},
-    serial);
-  advice.unary = (operator, argument, serial) => wrap(
-    access.advice.unary(operator, argument, serial),
-    {unary:operator, argument:jsonify(argument)},
     serial);
   return ({global, argm}) => ({
     advice: Object.assign({}, advice, {SANDBOX: access.capture(global)}),
